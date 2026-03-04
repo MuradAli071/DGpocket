@@ -1,0 +1,121 @@
+let wallets = JSON.parse(localStorage.getItem('full_db')) || [];
+let activeIdx = null;
+let tempItems = [];
+
+// Navigation
+function changeView(view) {
+    document.getElementById('view-home').classList.toggle('hidden', view !== 'home');
+    document.getElementById('view-detail').classList.toggle('hidden', view !== 'detail');
+    if(view === 'home') activeIdx = null;
+    renderHome();
+}
+
+function toggleMode() {
+    const isInc = document.getElementById('t-type').value === 'income';
+    document.getElementById('item-builder-container').classList.toggle('hidden', isInc);
+    document.getElementById('cash-input-container').classList.toggle('hidden', !isInc);
+}
+
+// Data Handling
+function addWallet() {
+    const name = document.getElementById('w-name').value;
+    const pin = document.getElementById('w-pin').value;
+    if(!name || !pin) return;
+    wallets.push({ name, pin, entries: [] });
+    save();
+    renderHome();
+    document.getElementById('w-name').value = '';
+    document.getElementById('w-pin').value = '';
+}
+
+function openWallet(idx) {
+    const pin = prompt(`Authorize PIN for ${wallets[idx].name}`);
+    if(pin === wallets[idx].pin) {
+        activeIdx = idx;
+        document.getElementById('detail-wallet-name').innerText = wallets[idx].name;
+        document.getElementById('btn-delete-wallet').onclick = () => {
+            if(confirm("Destroy this wallet?")) { wallets.splice(idx, 1); save(); changeView('home'); }
+        };
+        changeView('detail');
+        renderTransactions();
+    }
+}
+
+function addItemToList() {
+    const n = document.getElementById('sub-item-name').value;
+    const p = parseFloat(document.getElementById('sub-item-price').value);
+    if(!n || isNaN(p)) return;
+    tempItems.push({ n, p });
+    const li = document.createElement('li');
+    li.style.cssText = "display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid #eee";
+    li.innerHTML = `<span>${n}</span> <b>${p.toFixed(2)}</b>`;
+    document.getElementById('temp-item-list').appendChild(li);
+    document.getElementById('sub-item-name').value = '';
+    document.getElementById('sub-item-price').value = '';
+}
+
+function saveFullTransaction() {
+    const title = document.getElementById('t-desc').value;
+    const type = document.getElementById('t-type').value;
+    if(!title) return alert("Enter Title");
+
+    let total = 0, items = [];
+    if(type === 'expense') {
+        total = tempItems.reduce((s, i) => s + i.p, 0);
+        items = [...tempItems];
+    } else {
+        total = parseFloat(document.getElementById('single-amt').value);
+        if(isNaN(total)) return;
+        items = [{n: "Deposit", p: total}];
+    }
+
+    wallets[activeIdx].entries.push({ id: Date.now(), date: new Date().toLocaleDateString(), title, total, type, items });
+    tempItems = [];
+    document.getElementById('temp-item-list').innerHTML = '';
+    document.getElementById('t-desc').value = '';
+    document.getElementById('single-amt').value = '';
+    save();
+    renderTransactions();
+}
+
+function renderHome() {
+    const list = document.getElementById('wallet-list');
+    list.innerHTML = '';
+    wallets.forEach((w, i) => {
+        list.innerHTML += `<div class="card" style="cursor:pointer; margin-bottom:10px" onclick="openWallet(${i})"><b>📂 ${w.name}</b></div>`;
+    });
+}
+
+function renderTransactions() {
+    const list = document.getElementById('transaction-list');
+    const totalDisp = document.getElementById('total-val');
+    list.innerHTML = '';
+    let bal = 0;
+
+    wallets[activeIdx].entries.forEach(e => {
+        const isExp = e.type === 'expense';
+        bal += isExp ? -e.total : e.total;
+        const sub = e.items.map(i => `${i.n}`).join(', ');
+
+        list.innerHTML += `
+            <div class="item-row ${e.type}">
+                <small>${e.date}</small>
+                <div>
+                    <b>${e.title}</b><br>
+                    <small style="color:#94a3b8">${sub}</small>
+                </div>
+                <b class="amt">${isExp?'-':'+'} ${e.total.toFixed(2)}</b>
+                <button onclick="deleteEntry(${e.id})" class="btn-danger-text">✕</button>
+            </div>`;
+    });
+    totalDisp.innerText = bal.toFixed(2);
+}
+
+function deleteEntry(id) {
+    wallets[activeIdx].entries = wallets[activeIdx].entries.filter(e => e.id !== id);
+    save();
+    renderTransactions();
+}
+
+function save() { localStorage.setItem('full_db', JSON.stringify(wallets)); }
+renderHome();
